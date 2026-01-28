@@ -48,12 +48,15 @@ class AutoClickerApp(tk.Tk):
         self.add_left_key_str = self.DEFAULT_ADD_LEFT_KEY
         self.add_right_key_str = self.DEFAULT_ADD_RIGHT_KEY
 
+<<<<<<< HEAD
         # プリセット保存先フォルダの設定
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         self.presets_dir = os.path.join(base_dir, 'presets')
         if not os.path.exists(self.presets_dir):
             os.makedirs(self.presets_dir)
 
+=======
+>>>>>>> 7c5bf91dee6ee4042b93dc84d37c188b118f864e
         # 設定ファイルから読み込み
         self._load_config()
 
@@ -86,9 +89,14 @@ class AutoClickerApp(tk.Tk):
         # ファイルメニュー
         file_menu = tk.Menu(menu_bar, tearoff=0)
         menu_bar.add_cascade(label="ファイル", menu=file_menu)
+<<<<<<< HEAD
         file_menu.add_command(label="新規作成", command=self._new_preset)
         file_menu.add_command(label="設定を開く", command=self.load_preset)
         file_menu.add_command(label="設定を保存", command=self.save_preset)
+=======
+        file_menu.add_command(label="設定を保存", command=self.save_preset)
+        file_menu.add_command(label="設定を開く", command=self.load_preset)
+>>>>>>> 7c5bf91dee6ee4042b93dc84d37c188b118f864e
         file_menu.add_separator()
         file_menu.add_command(label="終了", command=self.destroy)
 
@@ -389,6 +397,7 @@ class AutoClickerApp(tk.Tk):
 
     # --- Preset Save/Load ---
 
+<<<<<<< HEAD
     def _new_preset(self):
         """新規作成。現在のリストをクリアする。"""
         # アクションが存在する場合、確認ダイアログを表示
@@ -406,6 +415,11 @@ class AutoClickerApp(tk.Tk):
             defaultextension=".json",
             filetypes=[("JSON Files", "*.json")]
         )
+=======
+    def save_preset(self):
+        """現在の設定をJSONファイルに保存する"""
+        path = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON Files", "*.json")])
+>>>>>>> 7c5bf91dee6ee4042b93dc84d37c188b118f864e
         if not path: return
         
         settings = {
@@ -427,6 +441,7 @@ class AutoClickerApp(tk.Tk):
 
     def load_preset(self):
         """JSONファイルから設定を読み込む"""
+<<<<<<< HEAD
         if not os.path.exists(self.presets_dir):
             os.makedirs(self.presets_dir)
 
@@ -434,6 +449,9 @@ class AutoClickerApp(tk.Tk):
             initialdir=self.presets_dir,
             filetypes=[("JSON Files", "*.json")]
         )
+=======
+        path = filedialog.askopenfilename(filetypes=[("JSON Files", "*.json")])
+>>>>>>> 7c5bf91dee6ee4042b93dc84d37c188b118f864e
         if not path: return
 
         try:
