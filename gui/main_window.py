@@ -3,31 +3,23 @@
 """
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
-import json
 from dataclasses import asdict
-import time
-from pynput import mouse, keyboard
+import os, sys
 
-# 相対インポートが難しい場合のパス解決用（開発環境に合わせて調整してください）
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-
-from core.actions import Action
-from gui.widgets import DraggableListbox
-from core.engine import MacroEngine
+from auto_clicker.core.actions import Action
+from auto_clicker.core.controller import MacroController
+from auto_clicker.core.settings import SettingsManager
+from auto_clicker.gui.widgets import DraggableListbox
+from auto_clicker.gui.action_form import ActionForm
+from auto_clicker.gui.settings_dialog import SettingsDialog
+from auto_clicker.utils import load_json, save_json
 
 class AutoClickerApp(tk.Tk):
-    # --- Constants ---
-    DEFAULT_START_KEY = "f1"
-    DEFAULT_STOP_KEY = "f2"
-    DEFAULT_ADD_LEFT_KEY = "f11"
-    DEFAULT_ADD_RIGHT_KEY = "f12"
-
     def __init__(self):
         super().__init__()
         self.title("Auto Clicker Macro")
         self.geometry("800x600")
+        self.bell = lambda: None # メッセージボックスの通知音を無効化
 
         self._init_data()
         self._init_listeners()
@@ -37,35 +29,40 @@ class AutoClickerApp(tk.Tk):
         """アプリケーションのデータメンバーを初期化する"""
         self.actions = []  # Actionオブジェクトのリスト
         self.editing_index = None  # 編集中のアクションのインデックス
-        self.is_capturing_key = False # キー入力取得モードのフラグ
         self.is_setting_hotkey = False # ホットキー設定ダイアログが開いているかのフラグ
-        self.capturing_hotkey_widget = None # ホットキー入力検知対象のウィジェット
-        self.macro_engine = None # マクロ実行エンジンインスタンス
+        self.settings_dialog = None # 設定ダイアログのインスタンス
 
-        # ホットキー設定
-        self.start_key = self.DEFAULT_START_KEY
-        self.stop_key = self.DEFAULT_STOP_KEY
-        self.add_left_key_str = self.DEFAULT_ADD_LEFT_KEY
-        self.add_right_key_str = self.DEFAULT_ADD_RIGHT_KEY
+        # アプリケーションのベースパスを決定（開発環境とexe実行環境の両対応）
+        if getattr(sys, 'frozen', False):
+            # PyInstallerでビルドされた実行可能ファイルの場合
+            self.base_dir = os.path.dirname(sys.executable)
+        else:
+            # 通常のPythonスクリプトとして実行した場合
+            self.base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-<<<<<<< HEAD
-        # プリセット保存先フォルダの設定
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        self.presets_dir = os.path.join(base_dir, 'presets')
+        self.presets_dir = os.path.join(self.base_dir, 'presets')
         if not os.path.exists(self.presets_dir):
             os.makedirs(self.presets_dir)
-
-=======
->>>>>>> 7c5bf91dee6ee4042b93dc84d37c188b118f864e
-        # 設定ファイルから読み込み
-        self._load_config()
+        
+        self.settings = SettingsManager(base_path=self.base_dir)
 
     def _init_listeners(self):
         """キーボードとマウスのリスナーを初期化する"""
-        self.mouse_controller = mouse.Controller()
-        # on_pressイベントハンドラを登録し、リスナーをデーモンスレッドとして開始
-        self.key_listener = keyboard.Listener(on_press=self.on_key_press)
-        self.key_listener.start()
+        # コントローラーに渡すコールバックを定義
+        callbacks = {
+            'on_start': lambda: self.after(0, self._on_macro_start_ui),
+            'on_finish': lambda: self.after(0, self._on_macro_finish_ui),
+            'on_error': lambda msg: self.after(0, lambda: messagebox.showwarning("エラー", msg)),
+            'on_add_click': lambda x, y, btn: self.after(0, lambda: self._add_click_action_by_hotkey(x, y, btn)),
+            'on_raw_key': self._on_raw_key_callback
+        }
+
+        self.controller = MacroController(self.settings, lambda: self.actions, callbacks)
+        
+        # 入力ブロック条件を設定（ホットキー設定中はマクロホットキーを無効化）
+        self.controller.is_input_blocked = lambda: self.is_setting_hotkey
+
+        self.controller.start_listener()
 
     def _init_gui(self):
         """GUIの主要コンポーネントを初期化・配置する"""
@@ -74,9 +71,8 @@ class AutoClickerApp(tk.Tk):
 
     def destroy(self):
         """アプリケーション終了時にリスナーを停止する"""
-        if hasattr(self, 'key_listener') and self.key_listener.is_alive():
-            self.key_listener.stop()
-            self.key_listener.join() # リスナースレッドが完全に終了するのを待つ
+        if hasattr(self, 'controller'):
+            self.controller.stop_listener()
         super().destroy()
 
     # --- GUI Creation Methods ---
@@ -87,23 +83,18 @@ class AutoClickerApp(tk.Tk):
         self.config(menu=menu_bar)
 
         # ファイルメニュー
-        file_menu = tk.Menu(menu_bar, tearoff=0)
-        menu_bar.add_cascade(label="ファイル", menu=file_menu)
-<<<<<<< HEAD
-        file_menu.add_command(label="新規作成", command=self._new_preset)
-        file_menu.add_command(label="設定を開く", command=self.load_preset)
-        file_menu.add_command(label="設定を保存", command=self.save_preset)
-=======
-        file_menu.add_command(label="設定を保存", command=self.save_preset)
-        file_menu.add_command(label="設定を開く", command=self.load_preset)
->>>>>>> 7c5bf91dee6ee4042b93dc84d37c188b118f864e
-        file_menu.add_separator()
-        file_menu.add_command(label="終了", command=self.destroy)
+        self.file_menu = tk.Menu(menu_bar, tearoff=0)
+        menu_bar.add_cascade(label="ファイル", menu=self.file_menu)
+        self.file_menu.add_command(label="新規作成", command=self._new_preset)
+        self.file_menu.add_command(label="設定を開く", command=self.load_preset)
+        self.file_menu.add_command(label="設定を保存", command=self.save_preset)
+        self.file_menu.add_separator()
+        self.file_menu.add_command(label="終了", command=self.destroy)
 
         # 編集メニュー
-        edit_menu = tk.Menu(menu_bar, tearoff=0)
-        menu_bar.add_cascade(label="編集", menu=edit_menu)
-        edit_menu.add_command(label="ホットキー設定...", command=self._open_settings_dialog)
+        self.edit_menu = tk.Menu(menu_bar, tearoff=0)
+        menu_bar.add_cascade(label="編集", menu=self.edit_menu)
+        self.edit_menu.add_command(label="ホットキー設定...", command=self._open_settings_dialog)
 
     def _create_main_layout(self):
         """メインのGUIレイアウトを作成する"""
@@ -114,51 +105,18 @@ class AutoClickerApp(tk.Tk):
         # 左側：設定・追加エリア
         left_panel = ttk.LabelFrame(paned_window, text="アクション設定", padding=10)
         paned_window.add(left_panel, weight=1)
-        self._init_input_forms(left_panel)
+        
+        self.action_form = ActionForm(left_panel, self.settings, self.on_action_add, self.cancel_edit)
+        self.action_form.pack(fill='both', expand=True)
+        
+        self.info_label = ttk.Label(left_panel, justify=tk.LEFT, wraplength=300)
+        self.info_label.pack(pady=(10, 0), anchor='w')
+        self._update_info_label()
 
         # 右側：リストエリア
         right_panel = ttk.LabelFrame(paned_window, text="アクションリスト (D&Dで移動, 右クリック/Deleteで操作)", padding=10)
         paned_window.add(right_panel, weight=2)
         self._init_list_view(right_panel)
-
-    def _init_input_forms(self, parent):
-        """左パネルのアクション設定フォームを作成する"""
-        # アクションタイプ選択
-        ttk.Label(parent, text="種類:").grid(row=0, column=0, sticky='w', pady=2)
-        self.var_type = tk.StringVar(value='click')
-        type_cb = ttk.Combobox(parent, textvariable=self.var_type, values=('click', 'key', 'wait', 'loop'), state='readonly')
-        type_cb.grid(row=0, column=1, sticky='ew', pady=2)
-        type_cb.bind('<<ComboboxSelected>>', self._on_type_changed) # イベント引数を渡す
-
-        # 詳細設定エリア（可変）
-        self.details_frame = ttk.Frame(parent)
-        self.details_frame.grid(row=1, column=0, columnspan=2, sticky='ew', pady=5)
-        
-        # 初期表示
-        self._create_click_form()
-
-        # 共通設定
-        ttk.Separator(parent).grid(row=2, column=0, columnspan=2, sticky='ew', pady=10)
-        
-        ttk.Label(parent, text="継続時間(秒):").grid(row=3, column=0, sticky='w')
-        self.entry_duration = ttk.Entry(parent)
-        self.entry_duration.insert(0, "0.0")
-        self.entry_duration.grid(row=3, column=1, sticky='ew')
-
-        ttk.Label(parent, text="待機間隔(秒):").grid(row=4, column=0, sticky='w')
-        self.entry_interval = ttk.Entry(parent)
-        self.entry_interval.insert(0, "0.1")
-        self.entry_interval.grid(row=4, column=1, sticky='ew')
-
-        # ボタン
-        self.btn_add = ttk.Button(parent, text="追加", command=self.add_action_from_form)
-        self.btn_add.grid(row=5, column=0, columnspan=2, pady=10, sticky='ew')
-        self.btn_cancel_edit = ttk.Button(parent, text="編集キャンセル", command=self.cancel_edit) # gridは編集モードで
-
-        # ヒント
-        info_text = f"ヒント: {self.add_left_key_str.upper()}で左クリック、{self.add_right_key_str.upper()}で右クリックをリストに直接追加"
-        self.info_label = ttk.Label(parent, text=info_text, justify=tk.LEFT, wraplength=250)
-        self.info_label.grid(row=7, column=0, columnspan=2, pady=(10, 0), sticky='w')
 
     def _init_list_view(self, parent):
         """右パネルのアクションリストビューを作成する"""
@@ -181,138 +139,26 @@ class AutoClickerApp(tk.Tk):
         self.context_menu.add_command(label="詳細設定 (編集)", command=self.load_selected_action_to_form)
         self.context_menu.add_command(label="削除", command=self.delete_selected_action)
 
-    # --- Dynamic Form Creation ---
-
-    def _on_type_changed(self, event=None):
-        """アクションタイプの変更に応じてフォームを切り替える"""
-        action_type = self.var_type.get()
-        # 現在のフォームをクリア
-        for widget in self.details_frame.winfo_children():
-            widget.destroy()
-        # 新しいフォームを作成
-        if action_type == 'click':
-            self._create_click_form()
-        elif action_type == 'key':
-            self._create_key_form()
-        elif action_type == 'wait':
-            self._create_wait_form()
-        elif action_type == 'loop':
-            self._create_loop_form()
-        elif action_type == 'loop_start':
-            self._create_loop_form() # 編集時も同じフォームを使用
-        elif action_type == 'loop_end':
-            self._create_loop_end_form()
-
-    def _create_click_form(self):
-        """クリックアクション用の設定フォームを作成する"""
-        
-        ttk.Label(self.details_frame, text="ボタン:").grid(row=0, column=0, sticky='w')
-        self.var_button = tk.StringVar(value='left')
-        ttk.Combobox(self.details_frame, textvariable=self.var_button, values=('left', 'right', 'middle'), state='readonly').grid(row=0, column=1)
-
-        ttk.Label(self.details_frame, text="タイプ:").grid(row=1, column=0, sticky='w')
-        self.var_click_type = tk.StringVar(value='single')
-        ttk.Combobox(self.details_frame, textvariable=self.var_click_type, values=('single', 'double'), state='readonly').grid(row=1, column=1)
-
-        ttk.Label(self.details_frame, text="X座標:").grid(row=2, column=0, sticky='w')
-        self.entry_x = ttk.Entry(self.details_frame)
-        self.entry_x.grid(row=2, column=1)
-        
-        ttk.Label(self.details_frame, text="Y座標:").grid(row=3, column=0, sticky='w')
-        self.entry_y = ttk.Entry(self.details_frame)
-        self.entry_y.grid(row=3, column=1)
-
-    def _create_key_form(self):
-        """キーアクション用の設定フォームを作成する"""
-        ttk.Label(self.details_frame, text="キー:").grid(row=0, column=0, sticky='w')
-        self.entry_key = ttk.Entry(self.details_frame)
-        self.entry_key.grid(row=0, column=1)
-
-        self.btn_capture_key = ttk.Button(self.details_frame, text="キー入力を取得", command=self._start_key_capture)
-        self.btn_capture_key.grid(row=1, column=0, columnspan=2, sticky='ew', pady=5)
-        ttk.Label(self.details_frame, text="(例: a, enter, ctrl)", foreground='gray').grid(row=2, column=0, columnspan=2, sticky='w')
-
-    def _create_wait_form(self):
-        """待機アクション用の説明を表示する"""
-        ttk.Label(self.details_frame, text="※待機時間は共通設定の\n「待機間隔」に入力してください").grid(row=0, column=0, columnspan=2)
-
-    def _create_loop_form(self):
-        """ループアクション用の設定フォームを作成する"""
-        ttk.Label(self.details_frame, text="繰り返し回数:").grid(row=0, column=0, sticky='w')
-        self.entry_loop_count = ttk.Entry(self.details_frame)
-        self.entry_loop_count.insert(0, "2") # デフォルト値
-        self.entry_loop_count.grid(row=0, column=1)
-
-    def _create_loop_end_form(self):
-        """ループ終了アクション用の説明を表示する"""
-        ttk.Label(self.details_frame, text="ループの終点を示します。\n対応するループ開始点とペアで使います。").grid(row=0, column=0, columnspan=2)
-
     # --- Action/Data Handling ---
 
-    def add_action_from_form(self):
-        """フォームの内容からアクションを作成または更新する"""
-        action_type = self.var_type.get()
-
-        # ループ追加は特別処理
-        if action_type == 'loop':
-            self._add_loop_around_actions()
-            return
-
-        try:
-            # 既存のアクションの編集処理、または通常のアクション追加
-            action = self._create_action_from_form()
+    def on_action_add(self, action):
+        """ActionFormからの追加コールバック"""
+        if action.type == 'loop_start':
+            # ループの場合はペアを追加する特別処理
+            if not self.actions:
+                messagebox.showwarning("追加不可", "アクションリストが空です。")
+                return
+            
+            start_action = action
+            end_action = Action(type='loop_end', interval=0)
+            self._add_action_to_view(start_action, index=0)
+            self._add_action_to_view(end_action, index=tk.END)
+        else:
             if self.editing_index is not None:
                 self._update_action_in_view(self.editing_index, action)
                 self.cancel_edit()
             else:
                 self._add_action_to_view(action)
-
-        except (ValueError, TypeError) as e:
-            messagebox.showerror("入力エラー", f"入力値が正しくありません。\n{e}")
-
-    def _add_loop_around_actions(self):
-        """現在のアクションリスト全体を囲むループを追加する"""
-        if not self.actions:
-            messagebox.showwarning("追加不可", "アクションリストが空です。ループで囲むアクションがありません。")
-            return
-
-        try:
-            loop_count = int(self.entry_loop_count.get())
-            if loop_count <= 0: raise ValueError()
-        except (ValueError, AttributeError):
-            messagebox.showerror("入力エラー", "繰り返し回数には1以上の整数を入力してください。")
-            return
-
-        start_action = Action(type='loop_start', loop_count=loop_count, interval=0)
-        end_action = Action(type='loop_end', interval=0)
-        self._add_action_to_view(start_action, index=0)
-        self._add_action_to_view(end_action, index=tk.END)
-
-    def _create_action_from_form(self):
-        """フォームの入力値からActionオブジェクトを生成する"""
-        action_type = self.var_type.get()
-        duration = float(self.entry_duration.get())
-        interval = float(self.entry_interval.get())
-
-        if action_type == 'click':
-            x = int(self.entry_x.get()) if self.entry_x.get() else 0
-            y = int(self.entry_y.get()) if self.entry_y.get() else 0
-            return Action(type='click', duration=duration, interval=interval,
-                          x=x, y=y, button=self.var_button.get(), click_type=self.var_click_type.get())
-        elif action_type == 'key':
-            key = self.entry_key.get()
-            if not key:
-                raise ValueError("キーを入力してください。")
-            self._validate_hotkey_conflict(key)
-            return Action(type='key', duration=duration, interval=interval, key=key)
-        elif action_type == 'wait':
-            return Action(type='wait', duration=0, interval=interval)
-        elif action_type == 'loop_start':
-            loop_count = int(self.entry_loop_count.get())
-            return Action(type='loop_start', loop_count=loop_count, interval=0) # ループ自体は待機しない
-        elif action_type == 'loop_end':
-            return Action(type='loop_end', interval=0) # ループ自体は待機しない
-        raise ValueError("不明なアクションタイプです。")
 
     def load_selected_action_to_form(self):
         """選択されたアクションをフォームにロードして編集モードにする"""
@@ -322,36 +168,12 @@ class AutoClickerApp(tk.Tk):
         index = sel[0]
         action = self.actions[index]
         self.editing_index = index
-
-        # フォームに値をセット
-        self.var_type.set(action.type)
-        self._on_type_changed()
-        
-        self.entry_duration.delete(0, tk.END); self.entry_duration.insert(0, str(action.duration))
-        self.entry_interval.delete(0, tk.END); self.entry_interval.insert(0, str(action.interval))
-
-        if action.type == 'click':
-            self.var_button.set(action.button)
-            self.var_click_type.set(action.click_type)
-            self.entry_x.delete(0, tk.END); self.entry_x.insert(0, str(action.x))
-            self.entry_y.delete(0, tk.END); self.entry_y.insert(0, str(action.y))
-        elif action.type == 'key':
-            self.entry_key.delete(0, tk.END); self.entry_key.insert(0, str(action.key))
-        elif action.type == 'loop_start':
-            self.entry_loop_count.delete(0, tk.END); self.entry_loop_count.insert(0, str(action.loop_count))
-
-        # UIを編集モードに切り替え
-        self.btn_add.config(text="変更を適用")
-        self.btn_cancel_edit.grid(row=6, column=0, columnspan=2, sticky='ew')
+        self.action_form.load_action(action)
 
     def cancel_edit(self):
         """編集モード解除"""
         self.editing_index = None
-        self.btn_add.config(text="追加")
-        self.btn_cancel_edit.grid_forget()
-        # フォームをデフォルト状態に戻す
-        self.var_type.set('click')
-        self._on_type_changed()
+        self.action_form.reset_form()
 
     def delete_selected_action(self):
         """リストで選択されているアクションを削除する"""
@@ -397,7 +219,6 @@ class AutoClickerApp(tk.Tk):
 
     # --- Preset Save/Load ---
 
-<<<<<<< HEAD
     def _new_preset(self):
         """新規作成。現在のリストをクリアする。"""
         # アクションが存在する場合、確認ダイアログを表示
@@ -415,33 +236,26 @@ class AutoClickerApp(tk.Tk):
             defaultextension=".json",
             filetypes=[("JSON Files", "*.json")]
         )
-=======
-    def save_preset(self):
-        """現在の設定をJSONファイルに保存する"""
-        path = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON Files", "*.json")])
->>>>>>> 7c5bf91dee6ee4042b93dc84d37c188b118f864e
         if not path: return
         
         settings = {
-            "start_key": self.start_key,
-            "stop_key": self.stop_key,
-            "add_left_key": self.add_left_key_str,
-            "add_right_key": self.add_right_key_str
+            "start_key": self.settings.start_key,
+            "stop_key": self.settings.stop_key,
+            "add_left_key": self.settings.add_left_key,
+            "add_right_key": self.settings.add_right_key
         }
         data = {
             "settings": settings,
             "actions": [asdict(a) for a in self.actions]
         }
         try:
-            with open(path, 'w') as f:
-                json.dump(data, f, indent=4)
+            save_json(path, data)
             messagebox.showinfo("保存", "ファイルを保存しました")
         except Exception as e:
             messagebox.showerror("エラー", f"保存に失敗しました: {e}")
 
     def load_preset(self):
         """JSONファイルから設定を読み込む"""
-<<<<<<< HEAD
         if not os.path.exists(self.presets_dir):
             os.makedirs(self.presets_dir)
 
@@ -449,21 +263,17 @@ class AutoClickerApp(tk.Tk):
             initialdir=self.presets_dir,
             filetypes=[("JSON Files", "*.json")]
         )
-=======
-        path = filedialog.askopenfilename(filetypes=[("JSON Files", "*.json")])
->>>>>>> 7c5bf91dee6ee4042b93dc84d37c188b118f864e
         if not path: return
 
         try:
-            with open(path, 'r') as f:
-                data = json.load(f)
+            data = load_json(path)
 
             # 設定を読み込み
             settings = data.get("settings", {})
-            self.start_key = settings.get("start_key", self.DEFAULT_START_KEY)
-            self.stop_key = settings.get("stop_key", self.DEFAULT_STOP_KEY)
-            self.add_left_key_str = settings.get("add_left_key", self.DEFAULT_ADD_LEFT_KEY)
-            self.add_right_key_str = settings.get("add_right_key", self.DEFAULT_ADD_RIGHT_KEY)
+            self.settings.start_key = settings.get("start_key", self.settings.DEFAULT_START_KEY)
+            self.settings.stop_key = settings.get("stop_key", self.settings.DEFAULT_STOP_KEY)
+            self.settings.add_left_key = settings.get("add_left_key", self.settings.DEFAULT_ADD_LEFT_KEY)
+            self.settings.add_right_key = settings.get("add_right_key", self.settings.DEFAULT_ADD_RIGHT_KEY)
             self._update_info_label()
 
             # アクションを読み込み
@@ -476,164 +286,63 @@ class AutoClickerApp(tk.Tk):
         except Exception as e:
             messagebox.showerror("エラー", f"読み込みに失敗しました: {e}")
 
-    # --- Config Handling ---
-
-    def _load_config(self):
-        """設定ファイルを読み込む"""
-        config_path = "config.json"
-        if os.path.exists(config_path):
-            try:
-                with open(config_path, "r") as f:
-                    config = json.load(f)
-                    self.start_key = config.get("start_key", self.start_key)
-                    self.stop_key = config.get("stop_key", self.stop_key)
-                    self.add_left_key_str = config.get("add_left_key", self.add_left_key_str)
-                    self.add_right_key_str = config.get("add_right_key", self.add_right_key_str)
-            except Exception as e:
-                print(f"設定ファイルの読み込みに失敗しました: {e}")
-
-    def _save_config(self):
-        """設定をファイルに保存する"""
-        config = {
-            "start_key": self.start_key,
-            "stop_key": self.stop_key,
-            "add_left_key": self.add_left_key_str,
-            "add_right_key": self.add_right_key_str
-        }
-        try:
-            with open("config.json", "w") as f:
-                json.dump(config, f, indent=4)
-        except Exception as e:
-            print(f"設定ファイルの保存に失敗しました: {e}")
-
     # --- Hotkey Handling ---
 
-    def on_key_press(self, key):
-        """グローバルキー入力イベントを処理する"""
-        # ホットキー設定ダイアログでキーキャプチャ中の場合、最優先で処理
-        if self.capturing_hotkey_widget:
-            key_str = self._get_key_str_from_pynput(key)
-            if key_str:
-                # GUIの更新はメインスレッドで行う
-                self.after(0, self._update_hotkey_button, key_str)
-            return # 他のホットキー処理をすべてブロック
+    def _on_raw_key_callback(self, key, key_str):
+        """
+        コントローラーから受け取った生のキー入力イベント。
+        設定ダイアログでのキーキャプチャなどに使用する。
+        戻り値: Trueなら処理済みとしてコントローラー側の処理を中断させる。
+        """
+        # 1. ホットキー設定ダイアログでキーキャプチャ中の場合
+        if self.settings_dialog and self.settings_dialog.winfo_exists():
+            # ダイアログ側でキャプチャ処理を行い、処理した場合はTrueが返る
+            if self.settings_dialog.handle_key_input(key, key_str):
+                return True
 
-        # アクション設定フォームのキー入力取得モードの場合
-        if self.is_capturing_key:
-            self._capture_key(key)
-            return
+        # 2. アクション設定フォームのキー入力取得モードの場合
+        if self.action_form.is_capturing_key:
+            self.after(0, self.action_form.receive_key, key)
+            return True # 処理済み
+            
+        return False # 未処理（コントローラー側でホットキー判定へ）
 
-        # ホットキー設定ダイアログが開いているがキャプチャ中でない場合は、マクロ関連のホットキーを無効化
-        if self.is_setting_hotkey:
-            return
-
-        key_str = self._get_key_str_from_pynput(key) # ここを修正
-        if not key_str: return
-
-        # マクロ開始・停止を最優先でチェック
-        self._check_macro_hotkeys(key_str)
-
-    def start_macro(self):
-        """マクロの実行を開始する"""
-        if self.macro_engine and self.macro_engine.is_alive():
-            print("マクロはすでに実行中です。")
-            return
-
-        if not self.actions:
-            messagebox.showwarning("マクロ開始不可", "実行するアクションが登録されていません。")
-            return
-
+    def _on_macro_start_ui(self):
+        """マクロ開始時のUI更新"""
         print("マクロを開始します...")
         self.title("Auto Clicker Macro (実行中...)")
+        self._set_ui_state('disabled')
 
-        self.macro_engine = MacroEngine(
-            actions=self.actions,
-            on_finish=lambda: self.after(0, self._on_macro_finish) # 終了時のコールバックを渡す
-        )
-        self.macro_engine.start()
-
-    def stop_macro(self):
-        """実行中のマクロを停止する"""
-        if self.macro_engine and self.macro_engine.is_alive():
-            print("マクロを停止します...")
-            self.macro_engine.stop()
-        else:
-            print("実行中のマクロはありません。")
-
-    def _on_macro_finish(self):
-        """マクロ終了時に呼び出され、GUIの状態をリセットする"""
+    def _on_macro_finish_ui(self):
+        """マクロ終了時のUI更新"""
         print("GUIをリセットします。")
+        self._set_ui_state('normal')
         self.title("Auto Clicker Macro")
-        self.macro_engine = None
 
-    def _add_click_action_by_hotkey(self, button_type):
+    def _add_click_action_by_hotkey(self, x, y, button_type):
         """ホットキーでクリックアクションを直接追加する"""
         try:
-            duration = float(self.entry_duration.get())
-            interval = float(self.entry_interval.get())
-            click_type = self.var_click_type.get() if self.var_type.get() == 'click' else 'single'
-            x, y = self.mouse_controller.position
+            duration = self.action_form.get_duration()
+            interval = self.action_form.get_interval()
 
             action = Action(type='click', duration=duration, interval=interval,
-                            x=int(x), y=int(y), button=button_type, click_type=click_type)
+                            x=int(x), y=int(y), button=button_type)
             self._add_action_to_view(action)
         except ValueError:
             print("Could not add action via hotkey: Invalid value in form.")
         except Exception as e:
             print(f"Unexpected error adding action via hotkey: {e}")
 
-    def _start_key_capture(self):
-        """キー入力取得モードを開始する"""
-        self.is_capturing_key = True
-        self.btn_capture_key.config(text="キーを押してください...")
-        self.focus_set() # 他のウィジェットからフォーカスを外す
-
-    def _capture_key(self, key):
-        """押されたキーを取得し、フォームに設定する"""
-        key_str = self._get_key_str_from_pynput(key)
-        if key_str:
-            # GUIの更新はメインスレッドで行う
-            self.after(0, self._update_key_entry, key_str)
-        self.is_capturing_key = False
-
-    def _update_key_entry(self, key_str):
-        """キー入力フォームの値を更新する"""
-        self.entry_key.delete(0, tk.END)
-        self.entry_key.insert(0, key_str)
-        self.btn_capture_key.config(text="キー入力を取得")
-
-    def _update_hotkey_button(self, key_str):
-        """ホットキー設定ボタンのテキストを更新し、キャプチャモードを終了する"""
-        if self.capturing_hotkey_widget:
-            # TODO: ここでキーの重複チェックをリアルタイムで行うとより親切
-            self.capturing_hotkey_widget.config(text=key_str)
-            self.capturing_hotkey_widget = None
-
-    def _get_key_str_from_pynput(self, key):
-        """pynputのKeyオブジェクトを文字列表現に変換する"""
-        if isinstance(key, keyboard.Key):
-            return key.name
-        if isinstance(key, keyboard.KeyCode):
-            return key.char
-        return None
-
-    def _check_macro_hotkeys(self, input_str):
-        """マクロ実行関連のホットキーをチェックして実行する"""
-        if not input_str: return
-
-        input_lower = input_str.lower()
-        if input_lower == self.start_key.lower():
-            self.after(0, self.start_macro)
-        elif input_lower == self.stop_key.lower():
-            self.after(0, self.stop_macro)
-        elif input_lower == self.add_left_key_str.lower():
-            self.after(0, lambda: self._add_click_action_by_hotkey('left'))
-        elif input_lower == self.add_right_key_str.lower():
-            self.after(0, lambda: self._add_click_action_by_hotkey('right'))
-
     def _update_info_label(self):
         """ホットキーのヒントラベルを現在の設定で更新する"""
-        info_text = f"ヒント: {self.add_left_key_str.upper()}で左クリック、{self.add_right_key_str.upper()}で右クリックをリストに直接追加"
+        base_hint = "ヒント: 「待機間隔」は、各アクションが実行された後の休憩時間です。"
+        hotkey_info = (
+            f"開始: {self.settings.start_key.upper()}\n"
+            f"停止: {self.settings.stop_key.upper()}\n"
+            f"左クリック追加: {self.settings.add_left_key.upper()}\n"
+            f"右クリック追加: {self.settings.add_right_key.upper()}"
+        )
+        info_text = f"{base_hint}\n\n現在のホットキー:\n{hotkey_info}"
         if hasattr(self, 'info_label'):
             self.info_label.config(text=info_text)
 
@@ -649,77 +358,54 @@ class AutoClickerApp(tk.Tk):
 
     def _open_settings_dialog(self):
         """ホットキー設定用のダイアログを開く"""
-        dialog = tk.Toplevel(self)
-        dialog.title("ホットキー設定")
-        dialog.geometry("350x200")
-        dialog.resizable(False, False)
-        dialog.transient(self) # 親ウィンドウの前面に表示
-        dialog.grab_set()      # モーダルにする
-        dialog.transient(self)
-        dialog.grab_set()
+        if self.settings_dialog and self.settings_dialog.winfo_exists():
+            self.settings_dialog.lift()
+            return
 
-        self.is_setting_hotkey = True
-        self.capturing_hotkey_widget = None
-
-        frame = ttk.Frame(dialog, padding="10")
-        frame.pack(fill="both", expand=True)
-
-        labels = ["マクロ開始:", "マクロ停止:", "左クリック追加:", "右クリック追加:"]
-        current_keys = [self.start_key, self.stop_key, self.add_left_key_str, self.add_right_key_str]
-        buttons = []
-
-        def start_capture(button):
-            if self.capturing_hotkey_widget:
-                messagebox.showinfo("情報", "キー入力待機中です。いずれかのキーを押してください。", parent=dialog)
-                return
-            self.capturing_hotkey_widget = button
-            button.config(text="キーを押してください...")
-
-        for i, text in enumerate(labels):
-            ttk.Label(frame, text=text).grid(row=i, column=0, sticky="w", pady=5, padx=5)
-            button = ttk.Button(frame, text=current_keys[i], width=20)
-            button.config(command=lambda b=button: start_capture(b))
-            button.grid(row=i, column=1, sticky="ew", pady=5, padx=5)
-            buttons.append(button)
-
-        frame.columnconfigure(1, weight=1)
+        def on_save():
+            self._update_info_label()
 
         def on_close():
+            self.settings_dialog = None
             self.is_setting_hotkey = False
-            self.capturing_hotkey_widget = None
-            dialog.destroy()
+        
+        self.is_setting_hotkey = True
+        self.settings_dialog = SettingsDialog(self, self.settings, on_save, on_close)
 
-        def apply_and_close():
-            new_keys = [b.cget("text") for b in buttons]
-            if not all(new_keys):
-                messagebox.showerror("エラー", "すべてのキーを設定してください。", parent=dialog)
-                return
-            if len(set(k.lower() for k in new_keys)) != len(new_keys):
-                messagebox.showerror("エラー", "ホットキーが重複しています。", parent=dialog)
-                return
 
-            self.start_key, self.stop_key, self.add_left_key_str, self.add_right_key_str = new_keys
-            self._update_info_label()
-            self._save_config()
-            messagebox.showinfo("設定", "ホットキーを更新しました。", parent=dialog)
-            on_close()
+    # --- UI State Control ---
 
-        btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=len(labels), column=0, columnspan=2, pady=10)
-        ttk.Button(btn_frame, text="OK", command=apply_and_close).pack(side="left", padx=10)
-        ttk.Button(btn_frame, text="キャンセル", command=on_close).pack(side="left", padx=10)
-        dialog.protocol("WM_DELETE_WINDOW", on_close)
+    def _set_child_widgets_state(self, parent, state):
+        """親ウィジェット内のすべての子ウィジェットの状態を再帰的に設定する"""
+        for child in parent.winfo_children():
+            try:
+                # 'state' オプションを持つウィジェットにのみ適用
+                child.config(state=state)
+            except tk.TclError:
+                # 'state' オプションを持たないウィジェット（例: Frame, Label）はスキップ
+                pass
+            # 子ウィジェットを再帰的に処理
+            self._set_child_widgets_state(child, state)
 
-    # --- Validation ---
+    def _set_ui_state(self, state):
+        """マクロ実行中にUIの主要部分を有効/無効にする"""
+        # リストボックスの状態を変更 (これで選択、D&D, Deleteキーが無効になる)
+        self.listbox.config(state=state)
 
-    def _validate_hotkey_conflict(self, key_to_check):
-        """指定されたキーがホットキーと競合しないか検証する"""
-        hotkeys = [
-            self.start_key, self.stop_key,
-            self.add_left_key_str, self.add_right_key_str
-        ]
-        if key_to_check.lower() in [h.lower() for h in hotkeys]:
-            raise ValueError(f"キー '{key_to_check}' はホットキーとして設定されているため使用できません。")
+        # アクションフォーム内の全ウィジェットの状態を変更
+        self._set_child_widgets_state(self.action_form, state)
+
+        # メニューバーの主要な項目を無効化
+        # '終了' は常に有効にしておく
+        self.file_menu.entryconfig("新規作成", state=state)
+        self.file_menu.entryconfig("設定を開く", state=state)
+        self.file_menu.entryconfig("設定を保存", state=state)
+        self.edit_menu.entryconfig("ホットキー設定...", state=state)
+
+        if state == 'disabled':
+            self.listbox.unbind("<Button-3>") # 右クリックメニューも無効化
+        else:
+            self.listbox.bind("<Button-3>", self.show_context_menu) # 再度有効化
 
 if __name__ == "__main__":
     app = AutoClickerApp()
