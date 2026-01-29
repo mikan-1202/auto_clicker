@@ -2,6 +2,7 @@
 アプリケーションの制御ロジック（Controller）
 """
 from pynput import mouse, keyboard
+import threading
 from .engine import MacroEngine
 from ..utils import get_key_str
 
@@ -17,6 +18,10 @@ class MacroController:
         
         # 外部からの入力ブロック判定用関数（デフォルトはブロックなし）
         self.is_input_blocked = lambda: False
+
+        self.running = False
+        self.macro_thread = None
+        self.stop_event = threading.Event() # この行を追加
 
     def start_listener(self):
         """キーボード監視を開始する"""
@@ -62,17 +67,18 @@ class MacroController:
             self._trigger_add_click('right')
 
     def start_macro(self):
-        """マクロを開始する"""
-        if self.macro_engine and self.macro_engine.is_alive():
+        if self.running:
             return
-
+        
         actions = self.get_actions()
         if not actions:
             if self.callbacks.get('on_error'):
-                self.callbacks['on_error']("実行するアクションが登録されていません。")
+                self.callbacks['on_error']("アクションがありません。")
             return
 
-        # UI側に開始を通知（ロック処理など）
+        self.running = True
+        self.stop_event.clear() # イベントをリセット
+        
         if self.callbacks.get('on_start'):
             self.callbacks['on_start']()
 
@@ -83,8 +89,12 @@ class MacroController:
         self.macro_engine.start()
 
     def stop_macro(self):
-        """マクロを停止する"""
-        if self.macro_engine and self.macro_engine.is_alive():
+        if not self.running:
+            return
+        print("停止信号を受信")
+        self.running = False
+        self.stop_event.set() # イベントをセットして待機を中断
+        if self.macro_engine:
             self.macro_engine.stop()
 
     def _on_macro_finish(self):

@@ -54,8 +54,9 @@ class MacroEngine(threading.Thread):
                     continue
 
                 # 通常のアクションを実行
-                action.execute()
-                time.sleep(action.interval)
+                action.execute(self._stop_event)
+                if self._stop_event.wait(action.interval):
+                    break
                 i += 1
         finally:
             print("マクロの実行が終了しました。")
