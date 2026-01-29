@@ -28,16 +28,16 @@ class Action:
     # ループ用
     loop_count: int = 1
 
-    def execute(self):
+    def execute(self, stop_event=None):
         """定義されたアクションを実行する"""
         if self.type == 'click':
-            self._execute_click()
+            self._execute_click(stop_event)
         elif self.type == 'key':
-            self._execute_key()
+            self._execute_key(stop_event)
         # loop_start, loop_end は engine 側で処理するため、ここでは何もしない
 
 
-    def _execute_click(self):
+    def _execute_click(self, stop_event=None):
         """クリックアクションを実行する"""
         mouse_controller.position = (self.x, self.y)
         time.sleep(0.05)  # マウスカーソルが移動するのを少し待つ
@@ -46,12 +46,15 @@ class Action:
 
         if self.duration > 0:
             mouse_controller.press(pynput_button)
-            time.sleep(self.duration)
+            if stop_event:
+                stop_event.wait(self.duration)
+            else:
+                time.sleep(self.duration)
             mouse_controller.release(pynput_button)
         else:
             mouse_controller.click(pynput_button, 1)
 
-    def _execute_key(self):
+    def _execute_key(self, stop_event=None):
         """キー入力アクションを実行する"""
         try:
             # 'enter', 'ctrl' などの特殊キーの場合
@@ -62,7 +65,10 @@ class Action:
 
         if self.duration > 0:
             keyboard_controller.press(key_to_press)
-            time.sleep(self.duration)
+            if stop_event:
+                stop_event.wait(self.duration)
+            else:
+                time.sleep(self.duration)
             keyboard_controller.release(key_to_press)
         else:
             keyboard_controller.press(key_to_press)

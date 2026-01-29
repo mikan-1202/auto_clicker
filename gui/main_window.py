@@ -17,7 +17,7 @@ from auto_clicker.utils import load_json, save_json
 class AutoClickerApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Auto Clicker Macro")
+        self.title("Macro Generator")
         self.geometry("800x600")
         self.bell = lambda: None # メッセージボックスの通知音を無効化
 
