@@ -1,8 +1,12 @@
 """
 ホットキー設定ダイアログ
 """
+
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox, ttk
+
+from ..core.settings import DEFAULT_HOTKEYS
+
 
 class SettingsDialog(tk.Toplevel):
     def __init__(self, parent, settings, on_save_callback, on_close_callback):
@@ -11,13 +15,13 @@ class SettingsDialog(tk.Toplevel):
         self.on_save_callback = on_save_callback
         self.on_close_callback = on_close_callback
         self.capturing_button = None
-        
+
         self.title("ホットキー設定")
         self.geometry("350x200")
         self.resizable(False, False)
-        self.transient(parent) # 親ウィンドウの前面に表示
-        self.grab_set() # モーダル化（他のウィンドウ操作をブロック）
-        
+        self.transient(parent)  # 親ウィンドウの前面に表示
+        self.grab_set()  # モーダル化（他のウィンドウ操作をブロック）
+
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self._init_ui()
 
@@ -27,8 +31,10 @@ class SettingsDialog(tk.Toplevel):
 
         labels = ["マクロ開始:", "マクロ停止:", "左クリック追加:", "右クリック追加:"]
         current_keys = [
-            self.settings.start_key, self.settings.stop_key,
-            self.settings.add_left_key, self.settings.add_right_key
+            self.settings.start_key,
+            self.settings.stop_key,
+            self.settings.add_left_key,
+            self.settings.add_right_key,
         ]
         self.buttons = []
 
@@ -48,7 +54,9 @@ class SettingsDialog(tk.Toplevel):
 
     def _start_capture(self, button):
         if self.capturing_button:
-            messagebox.showinfo("情報", "キー入力待機中です。いずれかのキーを押してください。", parent=self)
+            messagebox.showinfo(
+                "情報", "キー入力待機中です。いずれかのキーを押してください。", parent=self
+            )
             return
         self.capturing_button = button
         button.config(text="キーを押してください...")
@@ -67,27 +75,30 @@ class SettingsDialog(tk.Toplevel):
 
     def _apply_and_close(self):
         if self.capturing_button:
-            messagebox.showerror("エラー", "キー入力待機中の項目があります。\nいずれかのキーを押して設定を完了してください。", parent=self)
+            messagebox.showerror(
+                "エラー",
+                "キー入力待機中の項目があります。\nいずれかのキーを押して設定を完了してください。",
+                parent=self,
+            )
             return
 
         new_keys = [b.cget("text").lower() for b in self.buttons]
-        
+
         # 重複チェック
         if len(set(k.lower() for k in new_keys)) != len(new_keys):
             messagebox.showerror("エラー", "ホットキーが重複しています。", parent=self)
             return
-        
+
         # 設定を保存
-        self.settings.start_key = new_keys[0]
-        self.settings.stop_key = new_keys[1]
-        self.settings.add_left_key = new_keys[2]
-        self.settings.add_right_key = new_keys[3]
-        
-        self.settings.save()
-        
+        try:
+            self.settings.save(dict(zip(DEFAULT_HOTKEYS, new_keys)))
+        except (OSError, ValueError) as error:
+            messagebox.showerror("保存エラー", str(error), parent=self)
+            return
+
         if self.on_save_callback:
             self.on_save_callback()
-            
+
         messagebox.showinfo("設定", "ホットキーを更新しました。", parent=self)
         self._on_close()
 

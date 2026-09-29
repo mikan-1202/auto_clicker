@@ -24,3 +24,15 @@ dist/
 
 # Logs
 *.log
+
+# Local settings, generated artifacts and review backups
+/config.json
+/presets/
+/Output/
+/.portfolio-backup/
+/.uv-cache/
+/.venv-verify/
+.ruff_cache/
+.pytest_cache/
+coverage.xml
+.coverage

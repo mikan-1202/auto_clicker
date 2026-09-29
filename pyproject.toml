@@ -1,10 +1,21 @@
 [project]
 name = "autoclicker"
 version = "0.1.0"
-description = "Add your description here"
+description = "Tkinterで操作手順を編集・保存できるデスクトップ用マクロツール"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "pyinstaller>=6.18.0",
     "pynput>=1.8.1",
 ]
+
+[dependency-groups]
+dev = ["ruff>=0.11,<1"]
+build = ["pyinstaller>=6.18.0,<7"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+include = ["main.py", "auto_clicker/**/*.py", "tests/**/*.py", "pyproject.toml"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
