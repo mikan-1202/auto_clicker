@@ -1,4 +1,5 @@
 ; Build: ISCC installer_setup_script.iss (after PyInstaller)
+; Original script notice: Non-commercial use only
 #define MyAppName "MacroGenerator"
 #define MyAppVersion "0.1.0"
 #define MyAppExeName "MacroGenerator.exe"

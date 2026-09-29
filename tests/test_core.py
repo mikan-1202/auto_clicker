@@ -71,6 +71,21 @@ class ActionTests(unittest.TestCase):
             Action(type="key", key="a").execute(stop)
         controller.assert_not_called()
 
+    def test_stop_releases_held_key(self):
+        pressed = threading.Event()
+        device = Mock()
+        device.press.side_effect = lambda key: pressed.set()
+        engine = MacroEngine([Action(type="key", key="a", duration=60, interval=0)])
+        with patch("auto_clicker.core.actions.get_keyboard_controller", return_value=device):
+            engine.start()
+            try:
+                self.assertTrue(pressed.wait(2))
+            finally:
+                engine.stop()
+                engine.join(2)
+        self.assertFalse(engine.is_alive())
+        device.release.assert_called_once_with("a")
+
 
 class EngineTests(unittest.TestCase):
     def test_nested_loop_preserves_order(self):
@@ -258,6 +273,27 @@ class ControllerTests(unittest.TestCase):
         self.controller.start_macro()
         self.assertIsNone(self.controller.macro_engine)
         self.errors.assert_called_once()
+
+    def test_close_waits_for_execution_cleanup_and_blocks_restart(self):
+        entered = threading.Event()
+        release = threading.Event()
+
+        def execute(action, stop):
+            entered.set()
+            release.wait(2)
+
+        with patch.object(Action, "execute", execute):
+            self.controller.start_macro()
+            engine = self.controller.macro_engine
+            try:
+                self.assertTrue(entered.wait(2))
+                self.assertFalse(self.controller.close())
+                self.controller.start_macro()
+                self.assertIs(self.controller.macro_engine, engine)
+            finally:
+                release.set()
+                engine.join(2)
+        self.assertTrue(self.controller.close())
 
 
 if __name__ == "__main__":
