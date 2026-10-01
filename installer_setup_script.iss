@@ -1,5 +1,5 @@
 ; Build: ISCC installer_setup_script.iss (after PyInstaller)
-; Original script notice: Non-commercial use only
+; Project script: MIT License (see LICENSE). Inno Setup has its own terms.
 #define MyAppName "MacroGenerator"
 #define MyAppVersion "0.1.0"
 #define MyAppExeName "MacroGenerator.exe"
