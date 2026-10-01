@@ -74,6 +74,7 @@ auto_clicker/
 examples/                     サンプル設定・プリセット
 tests/                        実入力をモック化した回帰テスト
 docs/                         改善比較・応募用文章・検証記録
+tools/check_publication.py     公開対象のGit履歴・ファイル検査
 ```
 
 ## インストール
@@ -154,7 +155,7 @@ uv run --locked --group build pyinstaller --noconfirm MacroGenerator.spec
 ISCC installer_setup_script.iss
 ```
 
-EXEのビルドは確認しています。Inno Setupによるインストーラーのコンパイル・インストールは未検証です。
+EXEのビルドと、このWindows環境でのキー入力・再実行・座標クリック・停止・実行中の終了を確認しています。全機能・別PCでの動作、Inno Setupによるインストーラーのコンパイル・インストールは未検証です。
 
 ## 注意事項
 
@@ -182,3 +183,13 @@ EXEのビルドは確認しています。Inno Setupによるインストーラ�
 - アイコン等の素材の権利確認と、公開時のライセンス方針の決定
 
 元のリポジトリにライセンスファイルやアイコンの出典説明は確認できなかったため、今回任意のライセンスや権利情報を付与していません。
+
+## 公開準備の状況
+
+過去コミットを含めて個人メール・個人パス・Pythonバイトコードを除去し、秘密情報ファイルを除外しました。アイコンの再配布権と、このソースに適用するライセンスは所有者による確認待ちです。公開済み・配布条件確認済みという意味ではありません。
+
+公開前に次を実行してください。検査範囲、非公開バックアップの扱い、残る確認事項は[公開前の確認記録](docs/PUBLICATION.md)に記載しています。
+
+```powershell
+uv run --locked python tools/check_publication.py
+```

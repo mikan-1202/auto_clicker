@@ -6,9 +6,9 @@
 
 | 基準 | 内容 |
 |---|---|
-| `7d74399` (`ver1.1`) | 元の内側リポジトリの最新コミット。`core/`・`gui/`・`utils.py`を管理 |
-| `337e5df` (`ver1.0`) | Controller、フォーム、設定ダイアログ等の分離が既に行われている |
-| `863d999` / `portfolio-before` | 今回の変更前スナップショット。元の履歴を親に持ち、外側にあった起動ファイルや依存定義も収録 |
+| `2edac50` (`ver1.1`) | 元の内側リポジトリの最新コミットを公開向けに匿名化したもの。`core/`・`gui/`・`utils.py`を管理 |
+| `da76954` (`ver1.0`) | Controller、フォーム、設定ダイアログ等の分離が既に行われている |
+| `4bc782c` / `portfolio-before` | 今回の変更前スナップショット。元の履歴を親に持ち、外側にあった起動ファイルや依存定義も収録 |
 | `portfolio-before..HEAD` | 今回の改善差分。作業中は`git diff portfolio-before`で未コミット分も比較可能 |
 
 元の`.git`は`auto_clicker/`内にあり、外側のGitにはコミットがありませんでした。内側の全参照をbundleに保存し、元の管理ディレクトリもローカルの`.portfolio-backup/`へ退避しています。外側の作業ブランチでは過去コミットを祖先として保持し、`archive/main`・`archive/test`にも参照を保存しました。公開リポジトリにはバックアップを含めません。
@@ -17,11 +17,13 @@
 git log --oneline --graph --all
 git diff --stat portfolio-before HEAD
 git diff --ignore-space-at-eol portfolio-before HEAD -- auto_clicker
-git show 7d74399:core/controller.py
+git show 2edac50:core/controller.py
 git show portfolio-before:auto_clicker/core/controller.py
 ```
 
-移動前後のコアソースが一致することは、`7d74399`の各Pythonファイルと`portfolio-before`の`auto_clicker/`以下を比較して確認できます。外側にあったファイルの制作経緯は、元の内側リポジトリの履歴だけでは説明できません。
+移動前後のコアソースが一致することは、`2edac50`の各Pythonファイルと`portfolio-before`の`auto_clicker/`以下を比較して確認できます。外側にあったファイルの制作経緯は、元の内側リポジトリの履歴だけでは説明できません。
+
+2026-10-02に公開準備として履歴の著者・コミッター・タグ作成者を公開用名義に統一し、個人パスとPythonバイトコードを除去しました。このためコミットIDは以前の記録から変わっています。比較タグも匿名化後の履歴を指します。アプリの改修と履歴の匿名化は別の作業です。
 
 ## 改修前の構造・設計と良かった点
 
@@ -84,6 +86,6 @@ git show portfolio-before:auto_clicker/core/controller.py
 
 ## 公開範囲について
 
-現在のソースでは個人環境の絶対パスを削除し、ローカル設定、仮想環境、キャッシュ、生成物、バックアップを管理対象外にしています。元の履歴と改修前スナップショットには、当時のパスやGitの著者情報が残ります。履歴保全を優先し、過去コミットの書換えは行っていません。公開前に著者名・メールアドレス・過去のパスを含む履歴の公開範囲を確認してください。
+現在のソースと公開対象の履歴から個人パス・個人メール・Pythonバイトコードを除去しました。ローカル設定、仮想環境、キャッシュ、生成物、秘密情報ファイル、バックアップは管理対象外です。未加工の履歴はローカルのバックアップにのみ保存しており、このフォルダーを公開しないでください。確認範囲と権利上の未確認事項は[公開前の確認記録](PUBLICATION.md)を参照してください。
 
 検証結果と残る制約は[検証記録](VALIDATION.md)、応募向けの文章は[応募・面接用メモ](PORTFOLIO.md)に分けています。
